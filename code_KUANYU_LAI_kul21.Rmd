@@ -1,0 +1,351 @@
+---
+title: "2360final project"
+author: "Kuanyu Lai"
+date: "2023-04-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rstatix)
+library(GGally)
+library(caret)
+library(car)
+library(corrplot)
+library(psych)
+library(lmtest)
+
+```
+
+```{r}
+#import dataset
+house_data <- data.frame(read.csv("C:/Users/USER/Desktop/winter 2023/2360/finalproject_train.csv", header = T))
+house_test <- data.frame(read.csv("C:/Users/USER/Desktop/winter 2023/2360/finalproject_test.csv", header = T))
+
+house <- house_data[,-1]
+house1 <- house_data[,-1]
+```
+
+
+```{r}
+#summary of data
+summary(house1)
+str(house1)
+sd(house_data$price)
+```
+
+```{r}
+#check for missing value
+house_data %>%
+  is.na()%>%
+sum()
+```
+```{r}
+#check mean and median of the house price 
+mean(house_data$price)
+median(house_data$price)
+sd(house_data$price)
+
+# Mean > Median - Data is right skewed - Plotting to determine it
+par(mfrow = c(2,2))
+hist(house_data$price, main = "Sale Price Distribution", xlab = 'Sale Price', freq = FALSE,las = 3,breaks = 50)  
+lines(density(house_data$price))
+
+hist(house_data$AvgIncome, main = "AvgIncome Distribution", xlab = 'AvgIncome', freq = FALSE,las = 3,breaks = 50)  
+lines(density(house_data$AvgIncome))
+
+hist(house_data$sqft, main = "sqft Distribution", xlab = 'sqft', freq = FALSE,las = 3,breaks = 50)  
+lines(density(house_data$sqft))
+hist(house_data$bedrooms, main = "bedrooms Distribution", xlab = 'bedrooms', freq = FALSE,las = 3,breaks = 50)  
+lines(density(house_data$bedrooms))
+```
+
+
+```{r}
+#make a correlation plot
+num_features_init <- names(which(sapply(house1, is.numeric)))
+cat_features_init <- names(which(sapply(house1, is.factor)))
+
+all_numeric_init <- house1[, names(house1) %in% num_features_init]
+all_categoric_init <- house1[, names(house1) %in% cat_features_init]
+
+
+
+par(mfrow = c(1,1))
+correlations <- cor(all_numeric_init, use = "everything") # cor() function to create plots
+corrplot(correlations, method = "circle", sig.level = 0.01, insig = "blank") 
+```
+
+```{r}
+corrplot.mixed(correlations, upper = "shade", lower  = 'circle', tl.cex = 0.75, tl.col = "black", tl.srt = 45)
+```
+
+```{r warning=FALSE}
+## analysis of continuous variables
+auto.sel <- subset(house1, select = c(price, totalrooms, sqft,lotarea,AvgIncome,DistDowntown))
+
+auto.sel$price <- log10(auto.sel$price)
+auto.sel$sqft <- log10(auto.sel$sqft)
+auto.sel$sqft <- log10(auto.sel$sqft)
+
+
+pairs.panels(auto.sel, col = "red")
+```
+```{r}
+#investigate zipcode in relation to Avg income and house price 
+par(mfrow = c(1,2))
+plot(house1$zipcode,house1$AvgIncome)
+plot(house1$zipcode, house1$price)
+```
+```{r}
+#boxplot for house price
+boxplot(house1$price, main = "house price")
+mean(house1$price)
+sum(house1$price >= 1000000)
+```
+
+
+```{r}
+#investigate price relationship with sqrft and years built
+plot(house_data$sqft, house_data$price)
+plot(house_data$yearbuilt, house_data$price)
+```
+
+
+
+```{r}
+# multiple regression model
+
+#factors variables
+house1$desc <- factor(house1$desc)
+house1$exteriorfinish <- factor(house1$exteriorfinish)
+house1$rooftype <- factor(house1$rooftype)
+house1$basement <- factor(house1$basement)
+house1$Location <- factor(house1$Location)
+
+#test train split
+set.seed(456)
+size <- floor(0.85 * nrow(house1))
+index <- sample(seq_len(nrow(house1)), size = size) 
+  
+train_df1 <- house1[index,]
+test_df1 <- house1[-index,]
+
+#try out different models
+reg_model <- lm(price ~.-zipcode, data = train_df1)
+summary(reg_model)
+#r2 75.18%
+reg_model <- lm(price ~. -zipcode -totalrooms, data = train_df1)
+summary(reg_model)
+##r2 75.22%
+reg_model <- lm(price ~. -zipcode -totalrooms -Location, data = train_df1)
+summary(reg_model)
+#75.28%
+reg_model <- lm(price ~. -zipcode -totalrooms -Location -DistDowntown, data = train_df1)
+summary(reg_model)
+#75.14%
+
+plot(reg_model)
+
+
+# prediction
+Ml.train.pred <- predict(wls_model, train_df1)
+Ml.test.pred <- predict(wls_model, test_df1)
+
+train.corr <- round(cor(train_df1$price,Ml.train.pred),2)
+train.RMSE <- round(sqrt(mean((train_df1$price - Ml.train.pred)^2)))
+c(train.corr,train.RMSE)
+
+test.corr <- round(cor(test_df1$price,Ml.test.pred),2)
+test.RMSE <- round(sqrt(mean((test_df1$price - Ml.test.pred)^2)))
+c(test.corr,test.RMSE)
+
+
+# prediction
+Ml.train.pred <- predict(reg_model, train_df1)
+Ml.test.pred <- predict(reg_model, test_df1)
+
+train.corr <- round(cor(train_df1$price,Ml.train.pred),2)
+train.RMSE <- round(sqrt(mean((train_df1$price - Ml.train.pred)^2)))
+c(train.corr,train.RMSE)
+
+test.corr <- round(cor(test_df1$price,Ml.test.pred),2)
+test.RMSE <- round(sqrt(mean((test_df1$price - Ml.test.pred)^2)))
+c(test.corr,test.RMSE)
+```
+
+
+
+```{r}
+# lasso regression  
+
+#factor variables
+house$desc <- factor(house$desc)
+house$exteriorfinish <- factor(house$exteriorfinish)
+house$rooftype <- factor(house$rooftype)
+house$basement <- factor(house$basement)
+house$Location <- factor(house$Location)
+
+
+
+#standardize variable
+
+set.seed(156)
+#test train split
+train_df <- house[index,]
+test_df <- house[-index,]
+
+#potential lambda value
+lambda_vector <- 10^seq(5,-5, length = 500)
+ctrlspecs <- trainControl(method = "cv", number = 5, savePredictions = "all")
+set.seed(156)
+#specify lasso regression model
+
+model1 <- train(price~.-zipcode, 
+                data = train_df,
+                method  = "glmnet",
+                tuneGrid = expand.grid(alpha = 1, lambda = lambda_vector),
+                preProc = c("center","scale"),
+                trControl = ctrlspecs)
+
+#best tuning lambda value
+model1$bestTune
+
+#model1 model coefficients
+round(coef(model1$finalModel, model1$bestTune$lambda), 3)
+```
+
+```{r}
+#plot log lambda agianst RMSE
+plot(log(model1$results$lambda),model1$results$RMSE, xlab = "log(lambda)",ylab = "RMSE")
+```
+
+```{r}
+#variable importance
+ggplot(varImp(model1))
+```
+```{r}
+#model prediction
+predictions1 <- predict(model1, newdata = test_df, 
+                        s = model1$bestTune$lambda)
+mod1perf <- data.frame(RMSE = RMSE(predictions1, test_df$price),
+                       Rsquared = R2(predictions1, test_df$price))
+print(mod1perf)
+```
+
+```{r}
+#linear regression
+model2 <- train(price~.-zipcode -totalrooms -Location, 
+                data = train_df,
+                method  = "lm",
+                trControl = ctrlspecs)
+print(model2)
+summary(model2)
+```
+
+```{r}
+# prediction putcome using model from training set on test data
+
+predictions2 <- predict(model2, newdata = test_df)
+
+mod2perf <- data.frame(RMSE = RMSE(predictions2, test_df$price),
+                       Rsquared = R2(predictions2, test_df$price))
+print(mod2perf)
+```
+```{r}
+#compare model performance of k-fold cross validations
+model_list <- list(model1, model2)
+resamp <- resamples(model_list)
+summary(resamp)
+```
+
+```{r}
+#compare model1 and model2 prediction
+
+comp <- matrix(c(mod1perf$RMSE,mod1perf$Rsquared,
+                 mod2perf$RMSE,mod2perf$Rsquared ), ncol = 2, byrow = T)
+colnames(comp) <- c("RMSE", "R2")
+rownames(comp) <- c("lasso", "ols")
+comp <- as.table(comp)
+round(comp,2)
+```
+
+```{r}
+# random forest
+
+#factor variables
+house1$desc <- factor(house1$desc)
+house1$exteriorfinish <- factor(house1$exteriorfinish)
+house1$rooftype <- factor(house1$rooftype)
+house1$basement <- factor(house1$basement)
+house1$Location <- factor(house1$Location)
+
+
+#test train split
+set.seed(477)
+size <- floor(0.85 * nrow(house1))
+index <- sample(seq_len(nrow(house1)), size = size) 
+train_df1 <- house1[index,]
+test_df1 <- house1[-index,]
+
+
+
+train_ctrl <- trainControl(method="cv", 
+                           number=5, # number of folds
+                           search = "grid" )
+grid_rf <- expand.grid(mtry=c(1:15))                         
+
+#fit the random forest model 
+model3 <- train(price~.-zipcode, 
+                data = train_df1,
+                method  = "rf",
+                trControl = train_ctrl,
+                tuneGrid = grid_rf,
+                importance = TRUE,
+                 ntree = 500)
+plot(model3)
+model3
+```
+
+```{r}
+#make prediction on test set and calculate RMSE and R2
+predictions3 <- predict(model3, newdata = test_df1)
+mod3perf <- data.frame(RMSE = RMSE(predictions3, test_df1$price),
+                       Rsquared = R2(predictions3, test_df1$price))
+mod3perf
+```
+
+```{r}
+#variable importance
+ggplot(varImp(model3))
+```
+
+```{r}
+confusionMatrix(table())
+```
+
+```{r}
+#make prediction on test set
+house_test$desc <- factor(house_test$desc)
+house_test$exteriorfinish <- factor(house_test$exteriorfinish)
+house_test$rooftype <- factor(house_test$rooftype)
+house_test$basement <- factor(house_test$basement)
+house_test$Location <- factor(house_test$Location)
+
+predictions_test <- predict(model3, newdata = house_test)
+length(predictions_test[predictions_test <0])
+```
+
+
+```{r}
+#export to csv
+house_test$price <- predictions_test
+
+directory <-getwd()
+directory
+write.csv(house_test, "testing_predictions_KUANYU_LAI_KUL21.csv", row.names = F)
+
+```
+
+
